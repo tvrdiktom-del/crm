@@ -1,67 +1,58 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# Nastavení mobilního vzhledu stránky
+# Nastavení vzhledu stránky
 st.set_page_config(page_title="Cloakroom CRM", page_icon="💼", layout="centered")
 st.title("💼 Šatní CRM")
 
-# Propojení s Google Sheets pomocí standardního názvu
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# Definice správných sloupců
-POTREBNE_SLOUPCE = ["Nazev", "Adresa", "Rating", "Obor", "Kapacita_Satny", "Cena_Satny", "Kontaktni_Osoba", "Poznamka"]
-
-# Načtení dat
+# Přímé načtení veřejného odkazu z tvých Secrets
 try:
-    # Čtení přes veřejný odkaz s nastaveným ttl (vypršení cache) na 10 sekund
-    df = conn.read(ttl="10s")
+    # Získání čisté adresy ze Streamlit Secrets
+    url = st.secrets["connections"]["gsheets"]["spreadsheet"]
     
-    # Pokud by byly sloupce jinak, pojistíme je prázdnými hodnotami
-    for col in POTREBNE_SLOUPCE:
-        if col not in df.columns:
-            df[col] = ""
+    # Úprava odkazu, aby z něj Pandas mohl přímo stáhnout data (funguje pro jakýkoli typ tabulky na Disku)
+    if "/edit" in url:
+        csv_url = url.split("/edit")[0] + "/export?format=csv"
+    else:
+        csv_url = url
+        
+    # Načtení dat jako CSV
+    df = pd.read_csv(csv_url)
+    
+    # Odstranění prázdných řádků a sloupců pro čisté zobrazení
+    df = df.dropna(how="all")
+    
 except Exception as e:
-    st.error(f"Chyba při načítání dat: {e}")
-    df = pd.DataFrame(columns=POTREBNE_SLOUPCE)
+    st.error(f"Nepodařilo se připojit k tabulce. Zkontroluj odkaz v Secrets. Chyba: {e}")
+    df = pd.DataFrame()
 
 st.subheader("Seznam provozoven")
 
 if not df.empty and len(df) > 0:
-    # Mobilní vyhledávání a filtry
+    # Vyhledávání na mobilu
     hledat = st.text_input("🔍 Hledat podle názvu, adresy nebo oboru")
-    filtr_rating = st.multiselect("Filtr Ratingu", ["A", "B", "C"], default=["A", "B", "C"])
     
-    # Filtrování dat
-    df_filtered = df.copy()
-    df_filtered['Nazev'] = df_filtered['Nazev'].astype(str).fillna('')
-    df_filtered['Adresa'] = df_filtered['Adresa'].astype(str).fillna('')
-    df_filtered['Obor'] = df_filtered['Obor'].astype(str).fillna('')
-    
+    # Převedení sloupců na text, aby vyhledávání nespadlo
+    for col in df.columns:
+        df[col] = df[col].astype(str).replace("nan", "")
+        
+    # Filtrování podle hledaného výrazu
     if hledat:
-        df_filtered = df_filtered[
-            df_filtered['Nazev'].str.contains(hledat, case=False) | 
-            df_filtered['Adresa'].str.contains(hledat, case=False) |
-            df_filtered['Obor'].str.contains(hledat, case=False)
-        ]
+        mask = df.astype(str).apply(lambda x: x.str.contains(hledat, case=False)).any(axis=1)
+        df_filtered = df[mask]
+    else:
+        df_filtered = df.copy()
+        
+    st.write(f"Nalezeno záznamů: {len(df_filtered)}")
     
-    if 'Rating' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['Rating'].isin(filtr_rating)]
-    
-    st.write(f"Nalezeno klientů: {len(df_filtered)}")
-    
-    # Zobrazení přehledných karet
+    # Dynamické zobrazení všech sloupců, které v tabulce reálně máš
     for idx, row in df_filtered.iterrows():
-        # Schováme prázdné řádky, pokud by tam nějaké byly
-        if row.get('Nazev') == "":
-            continue
-            
-        with st.expander(f"**{row.get('Nazev')}** ({row.get('Rating', '-')})"):
-            st.write(f"🎭 **Obor:** {row.get('Obor', '-')}")
-            st.write(f"📍 **Adresa:** {row.get('Adresa', '-')}")
-            st.write(f"👤 **Kontakt:** {row.get('Kontaktni_Osoba', '-')}")
-            st.write(f"🧥 **Kapacita šatny:** {row.get('Kapacita_Satny', 0)} ks")
-            st.write(f"💰 **Cena šatny:** {row.get('Cena_Satny', 0)} Kč")
-            st.write(f"📝 **Poznámka:** {row.get('Poznamka', '-')}")
+        # Použijeme první sloupec jako hlavní název karty
+        hlavni_nazev = row.iloc[0] if len(row) > 0 else "Provozovna"
+        
+        with st.expander(f"**{hlavni_nazev}**"):
+            for col in df.columns:
+                # Vypíšeme všechny detaily pod sebe
+                st.write(f"**{col}:** {row[col]}")
 else:
-    st.info("V databázi zatím nejsou žádná data k zobrazení. Zkontrolujte, zda máte v Google Tabulce zadané řádky pod hlavičkou.")
+    st.info("V tabulce nebyla nalezena žádná data. Zkontroluj, zda v ní máš zadané řádky.")
