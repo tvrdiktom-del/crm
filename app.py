@@ -7,7 +7,7 @@ st.set_page_config(page_title="Cloakroom CRM", page_icon="💼", layout="centere
 st.title("💼 Šatní CRM")
 
 # Propojení s Google Sheets
-conn = st.connection("gsheets", type=GSheetsConnection)
+conn = st.connection("moje_crm", type=GSheetsConnection)
 
 # Definice správných sloupců včetně Oboru
 POTREBNE_SLOUPCE = ["Nazev", "Adresa", "Rating", "Obor", "Kapacita_Satny", "Cena_Satny", "Kontaktni_Osoba", "Poznamka"]
