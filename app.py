@@ -43,8 +43,8 @@ if not df.empty:
     df = df.rename(columns=mapping)
     
     # Bezpečný převod VŠECH buněk na čistý text, aby kód nikdy nespadl
-    for col in df.columns:
-        df[col] = df[col].fillna("").astype(str).str.strip()
+   for col in df.columns:
+    df[col] = df[col].fillna("").apply(lambda x: str(x).strip())
 
 st.subheader("Seznam provozoven")
 
