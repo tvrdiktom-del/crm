@@ -42,9 +42,9 @@ if not df.empty:
     
     df = df.rename(columns=mapping)
     
-    # Bezpečný převod VŠECH buněk na čistý text, aby kód nikdy nespadl
-   for col in df.columns:
-    df[col] = df[col].fillna("").apply(lambda x: str(x).strip())
+    # Bezpečné odsazení - vyčištění prvek po prvku bez .str chyb
+    for col in df.columns:
+        df[col] = df[col].fillna("").apply(lambda x: str(x).strip())
 
 st.subheader("Seznam provozoven")
 
@@ -54,7 +54,7 @@ if not df.empty and len(df) > 0:
     
     # Detekce stavů pro filtr
     mozne_stavy = sorted(list(df["Stav"].unique())) if "Stav" in df.columns else []
-    mozne_stavy = [s for s in mozne_stavy if s and s != "nan"]
+    mozne_stavy = [s for s in mozne_stavy if s and s != "nan" and s != ""]
     if not mozne_stavy:
         mozne_stavy = ["Nový", "Rozjednaný", "Aktivní", "Mrtvý"]
         
@@ -72,7 +72,7 @@ if not df.empty and len(df) > 0:
 
     for idx, row in df_filtered.iterrows():
         nazev = row.get("Nazev", "Neznámý")
-        if not nazev or nazev == "nan": 
+        if not nazev or nazev == "nan" or nazev == "": 
             continue
             
         stav_val = row.get("Stav", "")
@@ -86,7 +86,7 @@ if not df.empty and len(df) > 0:
             p_popis = row.get("Aktivita_Popis", "")
             p_dat = row.get("Datum_Aktivity", "")
             
-            if (p_akt and p_akt != "nan") or (p_popis and p_popis != "nan"):
+            if (p_akt and p_akt != "nan" and p_akt != "") or (p_popis and p_popis != "nan" and p_popis != ""):
                 datum_str = f" ({p_dat})" if p_dat and p_dat != "nan" else ""
                 st.info(f"**📝 Naposledy řešeno{datum_str}:**\n"
                         f"*{p_akt if p_akt and p_akt != 'nan' else 'Aktivita'}* - {p_popis if p_popis and p_popis != 'nan' else '-'}")
@@ -97,9 +97,9 @@ if not df.empty and len(df) > 0:
             st.write(f"👤 **Kontakt:** {row.get('Kontaktni_Osoba', '-')} (Tel: {row.get('Telefon', '-')})")
             st.write(f"🧥 **Šatna:** {row.get('Kapacita_Satny', '-')} ks | **Cena:** {row.get('Cena_Satny', '-')} Kč")
             
-            if row.get("Poznamka") and row.get("Poznamka") != "nan":
+            if row.get("Poznamka") and row.get("Poznamka") != "nan" and row.get("Poznamka") != "":
                 st.write(f"ℹ️ **Poznámka:** {row.get('Poznamka')}")
-            if row.get("Dalsi_Kontakt") and row.get("Dalsi_Kontakt") != "nan":
+            if row.get("Dalsi_Kontakt") and row.get("Dalsi_Kontakt") != "nan" and row.get("Dalsi_Kontakt") != "":
                 st.write(f"📅 **Příští kontakt:** {row.get('Dalsi_Kontakt')}")
 
             st.write("---")
@@ -107,16 +107,16 @@ if not df.empty and len(df) > 0:
             # MOBILNÍ AKCE
             c1, c2, c3 = st.columns(3)
             tel_cislo = row.get("Telefon", "")
-            if tel_cislo and tel_cislo != "nan":
+            if tel_cislo and tel_cislo != "nan" and tel_cislo != "":
                 c1.markdown(f"[📞 Volat](tel:{tel_cislo})", unsafe_allow_html=True)
                 
             adresa_val = row.get("Adresa", "")
-            if adresa_val and adresa_val != "nan":
+            if adresa_val and adresa_val != "nan" and adresa_val != "":
                 adr_encoded = urllib.parse.quote(adresa_val)
-                c2.markdown(f"[📍 Navigovat](https://maps.google.com/?q={adr_encoded})", unsafe_allow_html=True)
+                c2.markdown(f"[📍 Navigovat](http://maps.google.com/?q={adr_encoded})", unsafe_allow_html=True)
                 
             termin_val = row.get("Dalsi_Kontakt", "")
-            if termin_val and termin_val != "nan":
+            if termin_val and termin_val != "nan" and termin_val != "":
                 text_encoded = urllib.parse.quote(f"Kontaktovat: {nazev}")
                 loc_encoded = urllib.parse.quote(adresa_val) if adresa_val and adresa_val != "nan" else ""
                 g_cal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={text_encoded}&location={loc_encoded}"
@@ -124,7 +124,7 @@ if not df.empty and len(df) > 0:
 
             st.write("---")
             
-            # CHYTRÝ ODKAZ NA EDITACI V MOBILU
+            # ODKAZ NA EDITACI V MOBILU
             st.markdown(f"[✏️ Upravit data / Zapsat aktivitu]({url})", unsafe_allow_html=True)
 else:
     st.info("V tabulce nebyla nalezena žádná data.")
