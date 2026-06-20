@@ -3,9 +3,9 @@ import pandas as pd
 import urllib.parse
 
 st.set_page_config(page_title="Cloakroom CRM", page_icon="💼", layout="centered")
-st.title("💼 Šatní CRM s Editací")
+st.title("💼 Šatní CRM")
 
-# Načtení odkazu ze Secrets
+# Bezpečné načtení odkazu
 try:
     url = st.secrets["connections"]["gsheets"]["spreadsheet"]
     if "/edit" in url:
@@ -20,11 +20,11 @@ except Exception as e:
     st.error(f"Nepodařilo se připojit k tabulce. Chyba: {e}")
     df = pd.DataFrame()
 
-# Oprava a sjednocení názvů sloupců (case-insensitive pojistka)
+# Bezpečné vyčištění a párování sloupců
 if not df.empty:
     mapping = {}
     for col in df.columns:
-        c_clean = col.strip().lower()
+        c_clean = str(col).strip().lower()
         if "nazev" in c_clean or "název" in c_clean: mapping[col] = "Nazev"
         elif "adresa" in c_clean: mapping[col] = "Adresa"
         elif "rating" in c_clean: mapping[col] = "Rating"
@@ -36,15 +36,15 @@ if not df.empty:
         elif "stav" in c_clean: mapping[col] = "Stav"
         elif "telefon" in c_clean or "tel" in c_clean: mapping[col] = "Telefon"
         elif "aktivita" in c_clean and "popis" in c_clean: mapping[col] = "Aktivita_Popis"
-        elif "aktivita" in c_clean and ("typ" in c_clean or "posledni" in c_clean): mapping[col] = "Posledni_Aktivita"
+        elif "aktivita" in c_clean: mapping[col] = "Posledni_Aktivita"
         elif "datum" in c_clean: mapping[col] = "Datum_Aktivity"
-        elif "termin" in c_clean or "kontakt" in c_clean or "kalendar" in c_clean: mapping[col] = "Dalsi_Kontakt"
+        elif "termin" in c_clean or "příští" in c_clean: mapping[col] = "Dalsi_Kontakt"
     
     df = df.rename(columns=mapping)
     
-    # Vyčištění textů
+    # Bezpečný převod VŠECH buněk na čistý text, aby kód nikdy nespadl
     for col in df.columns:
-        df[col] = df[col].astype(str).replace("nan", "").str.strip()
+        df[col] = df[col].fillna("").astype(str).str.strip()
 
 st.subheader("Seznam provozoven")
 
@@ -52,13 +52,18 @@ if not df.empty and len(df) > 0:
     # Vyhledávání a filtry
     hledat = st.text_input("🔍 Hledat (Název, adresa, obor...)")
     
-    mozne_stavy = list(df["Stav"].unique()) if "Stav" in df.columns else ["Nový", "Rozjednaný", "Aktivní", "Mrtvý"]
-    mozne_stavy = [s for s in mozne_stavy if s]
+    # Detekce stavů pro filtr
+    mozne_stavy = sorted(list(df["Stav"].unique())) if "Stav" in df.columns else []
+    mozne_stavy = [s for s in mozne_stavy if s and s != "nan"]
+    if not mozne_stavy:
+        mozne_stavy = ["Nový", "Rozjednaný", "Aktivní", "Mrtvý"]
+        
     filtr_stav = st.multiselect("Filtrovat podle stavu", mozne_stavy, default=mozne_stavy)
 
     df_filtered = df.copy()
     if "Stav" in df_filtered.columns and filtr_stav:
         df_filtered = df_filtered[df_filtered["Stav"].isin(filtr_stav)]
+        
     if hledat:
         mask = df_filtered.astype(str).apply(lambda x: x.str.contains(hledat, case=False)).any(axis=1)
         df_filtered = df_filtered[mask]
@@ -67,54 +72,59 @@ if not df.empty and len(df) > 0:
 
     for idx, row in df_filtered.iterrows():
         nazev = row.get("Nazev", "Neznámý")
-        stav = f" [{row.get('Stav')}]" if row.get("Stav") else ""
-        rating = f" ({row.get('Rating')})" if row.get('Rating') else ""
-        
-        with st.expander(f"**{nazev}**{rating}{stav}"):
-            # ZOBRAZENÍ RAYNET AKTIVITY
-            if row.get("Posledni_Aktivita") or row.get("Aktivita_Popis"):
-                st.info(f"**📝 Naposledy řešeno ({row.get('Datum_Aktivity', '-')}) :**\n"
-                        f"*{row.get('Posledni_Aktivita', 'Aktivita')}* - {row.get('Aktivita_Popis', '-')}")
+        if not nazev or nazev == "nan": 
+            continue
             
-            # PŘEHLED ÚDAJŮ
+        stav_val = row.get("Stav", "")
+        stav_badge = f" [{stav_val}]" if stav_val and stav_val != "nan" else ""
+        rating_val = row.get("Rating", "")
+        rating_badge = f" ({rating_val})" if rating_val and rating_val != "nan" else ""
+        
+        with st.expander(f"**{nazev}**{rating_badge}{stav_badge}"):
+            # RAYNET AKTIVITA
+            p_akt = row.get("Posledni_Aktivita", "")
+            p_popis = row.get("Aktivita_Popis", "")
+            p_dat = row.get("Datum_Aktivity", "")
+            
+            if (p_akt and p_akt != "nan") or (p_popis and p_popis != "nan"):
+                datum_str = f" ({p_dat})" if p_dat and p_dat != "nan" else ""
+                st.info(f"**📝 Naposledy řešeno{datum_str}:**\n"
+                        f"*{p_akt if p_akt and p_akt != 'nan' else 'Aktivita'}* - {p_popis if p_popis and p_popis != 'nan' else '-'}")
+            
+            # KARTA KLIENTA
             st.write(f"🎭 **Obor:** {row.get('Obor', '-')}")
             st.write(f"📍 **Adresa:** {row.get('Adresa', '-')}")
             st.write(f"👤 **Kontakt:** {row.get('Kontaktni_Osoba', '-')} (Tel: {row.get('Telefon', '-')})")
             st.write(f"🧥 **Šatna:** {row.get('Kapacita_Satny', '-')} ks | **Cena:** {row.get('Cena_Satny', '-')} Kč")
-            if row.get("Poznamka"):
+            
+            if row.get("Poznamka") and row.get("Poznamka") != "nan":
                 st.write(f"ℹ️ **Poznámka:** {row.get('Poznamka')}")
-            if row.get("Dalsi_Kontakt"):
+            if row.get("Dalsi_Kontakt") and row.get("Dalsi_Kontakt") != "nan":
                 st.write(f"📅 **Příští kontakt:** {row.get('Dalsi_Kontakt')}")
 
             st.write("---")
             
-            # RYCHLÉ AKCE (Volat, Navigovat, Kalendář)
+            # MOBILNÍ AKCE
             c1, c2, c3 = st.columns(3)
-            if row.get("Telefon"):
-                c1.markdown(f"[📞 Volat](tel:{row.get('Telefon')})", unsafe_allow_html=True)
-            if row.get("Adresa"):
-                adr_encoded = urllib.parse.quote(row.get("Adresa"))
-                c2.markdown(f"[📍 Navigovat](http://maps.google.com/?q={adr_encoded})", unsafe_allow_html=True)
-            if row.get("Dalsi_Kontakt"):
-                text_encoded = urllib.parse.quote(f"Schůzka: {nazev}")
-                g_cal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={text_encoded}&location={adr_encoded if row.get('Adresa') else ''}"
+            tel_cislo = row.get("Telefon", "")
+            if tel_cislo and tel_cislo != "nan":
+                c1.markdown(f"[📞 Volat](tel:{tel_cislo})", unsafe_allow_html=True)
+                
+            adresa_val = row.get("Adresa", "")
+            if adresa_val and adresa_val != "nan":
+                adr_encoded = urllib.parse.quote(adresa_val)
+                c2.markdown(f"[📍 Navigovat](https://maps.google.com/?q={adr_encoded})", unsafe_allow_html=True)
+                
+            termin_val = row.get("Dalsi_Kontakt", "")
+            if termin_val and termin_val != "nan":
+                text_encoded = urllib.parse.quote(f"Kontaktovat: {nazev}")
+                loc_encoded = urllib.parse.quote(adresa_val) if adresa_val and adresa_val != "nan" else ""
+                g_cal_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={text_encoded}&location={loc_encoded}"
                 c3.markdown(f"[📅 Kalendář]({g_cal_url})", unsafe_allow_html=True)
 
             st.write("---")
             
-            # EDITACE NEBO ZÁPIS AKTIVITY
-            with st.popover("✏️ Upravit údaje / Zapsat aktivitu"):
-                st.caption(f"Úprava klienta: {nazev}")
-                new_stav = st.selectbox("Změnit Stav", ["Nový", "Rozjednaný", "Aktivní", "Mrtvý"], index=["Nový", "Rozjednaný", "Aktivní", "Mrtvý"].index(row.get("Stav")) if row.get("Stav") in ["Nový", "Rozjednaný", "Aktivní", "Mrtvý"] else 0, key=f"s_{idx}")
-                new_aktivita = st.selectbox("Nová aktivita (Typ)", ["Osobní jednání", "Telefonát", "E-mail", "Nabídka"], key=f"a_{idx}")
-                new_popis = st.text_area("Co se naposledy řešilo / Výsledek", value=row.get("Aktivita_Popis"), key=f"p_{idx}")
-                new_datum = st.text_input("Datum aktivity", value=row.get("Datum_Aktivity"), key=f"d_{idx}")
-                new_termin = st.text_input("Příští termín kontaktu", value=row.get("Dalsi_Kontakt"), key=f"t_{idx}")
-                
-                # Protože Excel/Google neumožňuje anonymní přímý zápis z webu, vygenerujeme odkaz
-                # který tě navede přímo do tvé tabulky, nebo můžeš využít poznámku
-                st.markdown(f"[➡️ Otevřít tabulku pro rychlý zápis]({url})", unsafe_allow_html=True)
-                st.info("Zkopíruj si změny a doplň je do řádku v Excelu. Google Disk u Excel formátů přímý zápis skrze kódy bohužel striktně blokuje.")
-
+            # CHYTRÝ ODKAZ NA EDITACI V MOBILU
+            st.markdown(f"[✏️ Upravit data / Zapsat aktivitu]({url})", unsafe_allow_html=True)
 else:
     st.info("V tabulce nebyla nalezena žádná data.")
