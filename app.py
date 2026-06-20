@@ -6,21 +6,24 @@ import pandas as pd
 st.set_page_config(page_title="Cloakroom CRM", page_icon="💼", layout="centered")
 st.title("💼 Šatní CRM")
 
-# Propojení s Google Sheets
-conn = st.connection("moje_crm", type=GSheetsConnection)
+# Propojení s Google Sheets pomocí standardního názvu
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Definice správných sloupců
 POTREBNE_SLOUPCE = ["Nazev", "Adresa", "Rating", "Obor", "Kapacita_Satny", "Cena_Satny", "Kontaktni_Osoba", "Poznamka"]
 
 # Načtení dat
 try:
-    # Čtení funguje přes odkaz bezproblémově
-    df = conn.read(ttl="5s")
-    if df.empty or not all(col in df.columns for col in POTREBNE_SLOUPCE):
-        st.warning("Tabulka byla načtena, ale sloupce neodpovídají vzoru.")
+    # Čtení přes veřejný odkaz s nastaveným ttl (vypršení cache) na 10 sekund
+    df = conn.read(ttl="10s")
+    
+    # Pokud by byly sloupce jinak, pojistíme je prázdnými hodnotami
+    for col in POTREBNE_SLOUPCE:
+        if col not in df.columns:
+            df[col] = ""
 except Exception as e:
-    st.error(f"Chyba při komunikaci s Google: {e}")
-    df = pd.DataFrame()
+    st.error(f"Chyba při načítání dat: {e}")
+    df = pd.DataFrame(columns=POTREBNE_SLOUPCE)
 
 st.subheader("Seznam provozoven")
 
@@ -47,9 +50,13 @@ if not df.empty and len(df) > 0:
     
     st.write(f"Nalezeno klientů: {len(df_filtered)}")
     
-    # Zobrazení karet na mobilu
+    # Zobrazení přehledných karet
     for idx, row in df_filtered.iterrows():
-        with st.expander(f"**{row.get('Nazev', 'Neznámý')}** ({row.get('Rating', '-')})"):
+        # Schováme prázdné řádky, pokud by tam nějaké byly
+        if row.get('Nazev') == "":
+            continue
+            
+        with st.expander(f"**{row.get('Nazev')}** ({row.get('Rating', '-')})"):
             st.write(f"🎭 **Obor:** {row.get('Obor', '-')}")
             st.write(f"📍 **Adresa:** {row.get('Adresa', '-')}")
             st.write(f"👤 **Kontakt:** {row.get('Kontaktni_Osoba', '-')}")
@@ -57,4 +64,4 @@ if not df.empty and len(df) > 0:
             st.write(f"💰 **Cena šatny:** {row.get('Cena_Satny', 0)} Kč")
             st.write(f"📝 **Poznámka:** {row.get('Poznamka', '-')}")
 else:
-    st.info("V databázi zatím nejsou žádná data k zobrazení.")
+    st.info("V databázi zatím nejsou žádná data k zobrazení. Zkontrolujte, zda máte v Google Tabulce zadané řádky pod hlavičkou.")
