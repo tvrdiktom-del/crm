@@ -1,15 +1,4 @@
-To je proto, že ten předchozí kód byl napsaný jako „univerzální čtečka“ – ukazoval pouze ty sloupce, které v tabulce přesně reálně existovaly. Pokud se nějaký údaj (třeba Kapacita, Cena nebo Telefon) v aplikaci přestal zobrazovat, znamená to, že se v tabulce jmenuje o chloupek jinak, než kód očekává (např. stačí malá/velká písmena nebo chybějící podtržítko), nebo se sloupce posunuly.
 
-A co se týče editace (upravování) – v tom máš naprostou pravdu, úprava stávajících dat v tom kódu zatím vůbec nebyla.
-
-Pojďme to vyřešit! Uděláme kód, který je na názvy sloupců maximálně odolný a hlavně přidáme možnost upravit jakýkoli údaj přímo z aplikace (včetně posunu do kalendáře nebo změny stavu).
-
-🛠️ Jak to bude fungovat:
-V každé kartě klienta přibude tlačítko „✏️ Upravit údaje / Aktivitu“. Když na něj klikneš, otevře se formulář s předvyplněnými daty. Ty je změníš a kód ti vygeneruje speciální odkaz pro rychlou aktualizaci.
-
-Jdi na GitHub, otevři app.py, klikni na tužku a vyměň celý kód za tento kompletní systém s editací:
-
-Python
 import streamlit as st
 import pandas as pd
 import urllib.parse
